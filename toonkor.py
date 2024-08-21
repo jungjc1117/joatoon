@@ -1,78 +1,64 @@
 from selenium import webdriver
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 import os
 import requests
 import time
+from concurrent.futures import ThreadPoolExecutor
 import platform
-import zipfile
+import zipfile  # zipfile 모듈 임포트
 
+# Firefox 옵션 설정 (Headless 모드 포함)
+options = Options()
+options.binary_location = r'C:\Program Files\Mozilla Firefox\firefox.exe'
+options.add_argument('--headless')  # Headless 모드로 브라우저 실행
+options.set_preference("general.useragent.override", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0")
 
-        
-def downloadimages():
-    # geckodriver의 경로를 명시적으로 지정
-    gecko_driver_path = r"C:\Users\jjc\Downloads\pythonWork\geckodriver32.exe"
+# geckodriver 경로를 설정
+service = Service(r"C:\Users\jjc\Downloads\pythonWork\geckodriver32.exe")
+driver = webdriver.Firefox(service=service, options=options)
+wait = WebDriverWait(driver, 30)
 
-    # Firefox 실행 파일의 경로 지정
-    firefox_binary_path = r"C:\Program Files\Mozilla Firefox\firefox.exe"
+# 이미지가 저장될 디렉토리 설정
+download_dir = r"C:\Users\jjc\Downloads\pythonWork\downloaded"
 
-    # Firefox 옵션 설정
-    options = Options()
-    options.binary_location = firefox_binary_path
+# 페이지 접속
+driver.get('https://toonkor429.com/%EC%9E%A5%EC%94%A8%EC%84%B8%EA%B0%80_%ED%98%B8%EC%9C%84%EB%AC%B4%EC%82%AC_1%ED%99%94.html')
 
-    # Service 객체 생성
-    service = Service(executable_path=gecko_driver_path)
+def download_image(session, img_url, comic_dir, idx):
+    try:
+        img_data = session.get(img_url).content
+        img_name = os.path.join(comic_dir, f"image_{idx+1}.jpg")
+        with open(img_name, 'wb') as handler:
+            handler.write(img_data)
+        print(f"Downloaded: {img_name}")
+    except Exception as e:
+        print(f"이미지 다운로드 실패: {e}")
 
-    # Firefox WebDriver 시작
-    driver = webdriver.Firefox(service=service, options=options)
+def download_images():
+    # 이미지가 모두 로드될 때까지 대기
+    images = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, '#toon_img img')))
 
-    # 순환할 숫자 범위 설정 (예: 1부터 10까지)
-    for i in range(1, 81):  # 예: 1부터 10까지
-        # 순환할 URL 설정
-        url = f"https://toonkor428.com/%EC%8B%9C%EC%B2%B4%EA%B8%B0%EC%82%AC_%EA%B5%B0%ED%84%B0_{i}%ED%99%94.html"
-        print(f"Loading URL: {url}")
-        driver.get(url)
-        
-        # 페이지가 완전히 로드될 때까지 대기
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.visibility_of_element_located((By.CSS_SELECTOR, "#toon_img"))
-            )
-        except Exception as e:
-            print(f"Error while waiting for page to load (URL: {url}): {e}")
-            continue
-
-        # 이미지가 포함된 요소 선택 (예: #toon_img 아래의 모든 img 태그)
-        images = driver.find_elements(By.CSS_SELECTOR, "#toon_img img")
-
-        # 이미지를 저장할 디렉토리 생성
-        download_dir = f"{i}"
-        if not os.path.exists(download_dir):
-            os.makedirs(download_dir)
-
-        # 이미지 다운로드
-        for idx, img in enumerate(images):
-            img_url = img.get_attribute("src")
-            if img_url:  # URL이 비어 있지 않은지 확인
-                try:
-                    img_data = requests.get(img_url).content
-                    img_name = os.path.join(download_dir, f"image_{idx+1}.jpg")
-                    
-                    with open(img_name, 'wb') as handler:
-                        handler.write(img_data)
-                        print(f"Downloaded: {img_name}")
-                except Exception as e:
-                    print(f"Error downloading image {img_url}: {e}")
-                    
-        # 다음 페이지로 넘어가기 전에 잠시 대기
-        time.sleep(2)
-
-    # 작업이 끝난 후 브라우저를 닫음
-    driver.quit()
+    # 폴더 설정
+    comic_name = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.toon-title'))).text
+    comic_dir = os.path.join(download_dir, comic_name)
     
+    if not os.path.exists(comic_dir):
+        os.makedirs(comic_dir)
+
+    # 세션 생성 및 이미지 병렬 다운로드
+    session = requests.Session()
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        for idx, img in enumerate(images):
+            img_url = img.get_attribute('src')
+            if img_url:
+                executor.submit(download_image, session, img_url, comic_dir, idx)
+    
+    return comic_dir  # 다운로드한 폴더 경로 반환
+
 def zip_folders(folder_paths, zip_name):
     """
     주어진 폴더들을 하나의 ZIP 파일로 압축합니다.
@@ -94,29 +80,56 @@ def zip_folders(folder_paths, zip_name):
     
     print(f"'{zip_path}' 파일이 생성되었습니다.")
     
-def shutdown_system():
+def delete_folders(folder_paths):
     """
-    시스템을 종료합니다.
+    주어진 폴더들을 삭제합니다.
+
+    :param folder_paths: 삭제할 폴더들의 경로 리스트 (예: ['1화', '2화', ...])
     """
-    try:
-        if platform.system() == "Windows":
-            os.system("shutdown /s /t 1")
-        elif platform.system() == "Linux" or platform.system() == "Darwin":
-            os.system("sudo shutdown -h now")
-        else:
-            print("지원하지 않는 운영 체제입니다.")
-    except Exception as e:
-        print(f"시스템 종료 중 오류 발생: {e}")
-        
+    for folder in folder_paths:
+        try:
+            if os.path.exists(folder):
+                # 폴더 내부의 모든 파일과 하위 폴더 삭제
+                for root, dirs, files in os.walk(folder, topdown=False):
+                    for name in files:
+                        os.remove(os.path.join(root, name))
+                    for name in dirs:
+                        os.rmdir(os.path.join(root, name))
+                # 최종적으로 폴더 자체를 삭제
+                os.rmdir(folder)
+                print(f"Deleted folder: {folder}")
+            else:
+                print(f"Folder does not exist: {folder}")
+        except Exception as e:
+            print(f"Error deleting folder {folder}: {e}")
 
 if __name__ == "__main__":
-    downloadimages()
-    
-    # 압축할 폴더 경로 리스트
-    folder_paths = [str(i) for i in range(1, 80)]
+    folder_paths = []
+
+    while True:
+        try:
+            comic_dir = download_images()
+            folder_paths.append(comic_dir)
+            next_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.btn-resource.btn-next.at-tip')))
+            if next_button.is_displayed() and next_button.is_enabled():
+                next_button.click()
+            else:
+                print("다음 버튼이 비활성화 상태입니다. 종료합니다.")
+                break
+            time.sleep(2)  # 페이지 로드를 위해 잠시 대기
+        except Exception as e:
+            print("더 이상 다음 버튼이 없습니다. 종료합니다.")
+            print(f"오류: {str(e)}")
+            break
+
     # 생성할 ZIP 파일 이름 (확장자 제외)
-    zip_name = '시체기사군터80화까지'
+    zip_name = '장씨세가 호위무사'
+    
     # ZIP 파일 생성
     zip_folders(folder_paths, zip_name)
     
-    shutdown_system()
+    # 폴더 삭제
+    delete_folders(folder_paths)
+    
+    # 드라이버 종료
+    driver.quit()
