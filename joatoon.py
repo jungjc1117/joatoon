@@ -12,12 +12,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # --- 설정 변수 ---
 # ⚠️ BASE_URL을 여러 개의 웹툰 목록 URL을 포함하는 '리스트'로 변경합니다.
 BASE_URLS = [
-    # "https://joatoon69.com/toon/w/12627?cso=desc"    # 조폭여친
-    # "https://joatoon69.com/toon/w/4819?cso=desc"    # 천일의 아내
-    # "https://joatoon69.com/toon/w/3595?cso=desc"    # 사내에서는 정숙할 것
-    # "https://joatoon69.com/toon/w/13287?cso=desc"    # 킬링 마이 허니
-    # "https://joatoon69.com/toon/w/13173?cso=desc"    # 플리즈 슛 미
-    "https://joatoon69.com/toon/w/5720?cso=desc"    # 부대에 남군이 나 혼자
+    "https://joatoon69.com/toon/w/8784?cso=desc",    # 신입사원 김철수
+
+    "https://joatoon69.com/toon/w/7342?cso=desc",    # 사신소년
+    "https://joatoon69.com/toon/w/1948?cso=desc",    # 나쁜사람
+    "https://joatoon69.com/toon/w/12163?cso=desc",    # 쓰레기의 사정
+    "https://joatoon69.com/toon/w/2263?cso=desc",    # 왕따가 격투기를 너무 잘함
+    "https://joatoon69.com/toon/w/1611?cso=desc",    # 절대역
+    "https://joatoon69.com/toon/w/12711?cso=desc",    # 이직로그
 ]
 # 다운로드 파일을 저장할 상위 폴더 이름
 DOWNLOAD_DIR = "downloaded" 
@@ -234,4 +236,4 @@ def scrape_webtoon():
 
 if __name__ == "__main__":
     scrape_webtoon()
-    os.system("shutdown -s -t 5")
+    # os.system("shutdown -s -t 5")
