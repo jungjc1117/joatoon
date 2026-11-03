@@ -5,7 +5,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
-
+import winsound
 
 def download_all_webtoon_episodes():
   # 1. 크롬 드라이버 설정
@@ -25,13 +25,26 @@ def download_all_webtoon_episodes():
     driver.get(list_url)
     time.sleep(3)
 
-    # 3. 모든 에피소드 카드 요소들 찾기
+    # 3. 목록 페이지 하단 끝까지 스크롤하여 모든 에피소드 로드
+    print("목록의 모든 에피소드를 불러오기 위해 스크롤을 진행합니다...")
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    while True:
+      driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+      time.sleep(1.5)  # 컨텐츠 로딩 대기 시간
+      new_height = driver.execute_script("return document.body.scrollHeight")
+      if new_height == last_height:
+        # 높이가 더 이상 변하지 않으면 최하단 도달
+        break
+      last_height = new_height
+    print("목록 전체 로드 완료!")
+
+    # 4. 완전히 로드된 모든 에피소드 카드 요소들 찾기
     cards = driver.find_elements(
         By.CSS_SELECTOR, "div.card.card-fluid.mt-2.toon-link-s"
     )
     print(f"총 {len(cards)}개의 에피소드를 발견했습니다.")
 
-    # 각 에피소드 카드 정보 미리 수집 (상세 페이지로 이동하면 기존 드라이버 컨텍스트가 바뀌므로 링크와 폴더명을 미리 리스트에 저장)
+    # 각 에피소드 카드 정보 미리 수집 (상세 페이지로 이동하면 기존 드라이버 컨텍스트가 바뀌므로 리스트에 저장)
     episode_tasks = []
     for card in cards:
       try:
@@ -56,7 +69,7 @@ def download_all_webtoon_episodes():
         print(f"에피소드 정보 추출 중 에러: {e}")
         continue
 
-    # 4. 각 에피소드별로 순회하며 이미지 다운로드 수행
+    # 5. 각 에피소드별로 순회하며 이미지 다운로드 수행
     for idx, task in enumerate(episode_tasks, start=1):
       target_href = task["href"]
       folder_name = task["folder_name"]
@@ -70,15 +83,19 @@ def download_all_webtoon_episodes():
       driver.get(target_href)
       time.sleep(2)
 
-      # 스크롤을 내려서 Lazy Load 이미지 모두 로드
-      last_height = driver.execute_script("return document.body.scrollHeight")
+      # 상세 페이지 스크롤을 내려서 내부 이미지(Lazy Load) 모두 로드
+      detail_last_height = driver.execute_script(
+          "return document.body.scrollHeight"
+      )
       while True:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(1.2)
-        new_height = driver.execute_script("return document.body.scrollHeight")
-        if new_height == last_height:
+        detail_new_height = driver.execute_script(
+            "return document.body.scrollHeight"
+        )
+        if detail_new_height == detail_last_height:
           break
-        last_height = new_height
+        detail_last_height = detail_new_height
 
       # 이미지 태그 수집
       img_elements = driver.find_elements(
@@ -100,7 +117,7 @@ def download_all_webtoon_episodes():
         print("이미지가 없어 건너뜁니다.")
         continue
 
-      # 폴더 생성
+      # 폴더 생성 (<p> 태그에서 추출한 이름 사용)
       if not os.path.exists(folder_name):
         os.makedirs(folder_name)
         print(f"폴더 생성 완료: '{folder_name}'")
@@ -113,7 +130,7 @@ def download_all_webtoon_episodes():
           "Referer": target_href,
       }
 
-      # 이미지 다운로드 및 일련번호 저장
+      # 이미지 다운로드 및 일련번호 저장 (0001.jpg, 0002.jpg...)
       for img_idx, img_url in enumerate(img_urls, start=1):
         try:
           response = requests.get(img_url, headers=headers, stream=True)
@@ -128,7 +145,6 @@ def download_all_webtoon_episodes():
           print(f"이미지 다운로드 에러: {e}")
 
       print(f"'{folder_name}' 에피소드 다운로드 완료!")
-      # 목록 페이지로 다시 돌아가기 전 잠시 대기
       time.sleep(1)
 
     print("\n모든 에피소드 다운로드 작업이 완료되었습니다!")
@@ -139,3 +155,4 @@ def download_all_webtoon_episodes():
 
 if __name__ == "__main__":
   download_all_webtoon_episodes()
+  winsound.Beep(2000, 1000)
